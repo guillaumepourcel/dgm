@@ -21,10 +21,33 @@ from polyglot.dockerfiles import (
     get_dockerfile_env,
     get_dockerfile_instance,
 )
-from swebench.harness.utils import (
-    get_requirements,
-    get_environment_yml,
-)
+try:
+    from swebench.harness.utils import (
+        get_requirements,
+        get_environment_yml,
+    )
+except ModuleNotFoundError:
+    # Polyglot can run without the external swebench package in the common path.
+    # These helpers are only needed if specs request requirements.txt or environment.yml.
+    def get_requirements(instance: dict) -> str:
+        reqs = instance.get("requirements", "")
+        if isinstance(reqs, list):
+            return "\n".join(str(x) for x in reqs) + ("\n" if reqs else "")
+        return str(reqs or "")
+
+    def get_environment_yml(instance: dict, env_name: str) -> str:
+        env_yml = instance.get("environment_yml")
+        if env_yml:
+            return str(env_yml)
+        # Minimal fallback environment; enough for conda env create to succeed
+        # when dataset metadata does not provide an explicit environment.yml.
+        return (
+            f"name: {env_name}\n"
+            "channels:\n"
+            "  - conda-forge\n"
+            "dependencies:\n"
+            "  - python\n"
+        )
 
 DIFF_MODIFIED_FILE_REGEX = r"--- a/(.*)"
 
