@@ -25,3 +25,8 @@ polyglot/predictions/
 
 final_results/
 analysis/output/
+results_downloaded/*
+polyglot/predictions_best_agent_single/*
+test_agent/*
+polyglot/subsets/python_first5.json
+analysis/artifacts/*
