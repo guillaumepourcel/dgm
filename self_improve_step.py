@@ -8,9 +8,6 @@ from llm import create_client, get_response_from_llm, extract_json_between_marke
 from prompts.self_improvement_prompt import get_diagnose_prompt_polyglot, get_diagnose_prompt_swe, get_problem_description_prompt
 from prompts.diagnose_improvement_prompt import get_diagnose_improvement_prompt
 from prompts.testrepo_prompt import get_test_description
-from swe_bench.harness import harness
-from polyglot.harness import harness as polyglot_harness
-from swe_bench.report import make_report
 from utils.common_utils import load_json_file
 from utils.evo_utils import get_model_patch_paths, get_all_performance, is_compiled_self_improve
 from utils.docker_utils import (
@@ -25,8 +22,8 @@ from utils.docker_utils import (
 )
 
 dataset = None
-diagnose_model = 'o1-2024-12-17'
-
+# diagnose_model = 'o1-2024-12-17'
+diagnose_model = 'claude-3-5-sonnet-20241022'
 def diagnose_problem(entry, commit, root_dir, out_dir, patch_files=[], max_attempts=3, polyglot=False):
     client = create_client(diagnose_model)
     if polyglot:
@@ -123,6 +120,9 @@ def save_metadata(metadata, output_dir):
         json.dump(metadata, f, indent=4)
 
 def run_harness_swe(entry, model_name_or_path, patch_files, num_evals, output_dir, metadata, run_id, test_more_threshold, test_task_list, test_task_list_more):
+    from swe_bench.harness import harness
+    from swe_bench.report import make_report
+
     safe_log('Start harness')
     test_task_list = [entry] if test_task_list is None else test_task_list
     dnames = harness(
@@ -178,6 +178,8 @@ def run_harness_swe(entry, model_name_or_path, patch_files, num_evals, output_di
         safe_log("End of evaluation more")
 
 def run_harness_polyglot(entry, model_name_or_path, patch_files, num_evals, output_dir, metadata, run_id, test_more_threshold, test_task_list, test_task_list_more):
+    from polyglot.harness import harness as polyglot_harness
+
     safe_log('Start harness')
     test_task_list = [entry] if test_task_list is None else test_task_list
     safe_log(f'workers {min(10, len(test_task_list))}')
@@ -273,6 +275,7 @@ def self_improve(
     )
     container.start()
 
+    # NOTE: Organize the folders for the docker
     if polyglot:
         # remove the swe version of coding_agent.py
         exec_result = container.exec_run("rm /dgm/coding_agent.py", workdir='/')
@@ -315,6 +318,7 @@ def self_improve(
     # Get tasks to improve
     if entry:
         safe_log(f"Task to improve: {entry}")
+        # ??? what does diagnose pb do?
         problem_statement = diagnose_problem(entry, parent_commit, root_dir, out_dir_base, patch_files=patch_files, polyglot=polyglot)
         safe_log(f"problem_statement: {problem_statement}")
     else:
