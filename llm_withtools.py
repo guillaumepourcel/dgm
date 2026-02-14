@@ -1,5 +1,6 @@
 import ast
 import json
+import os
 import re
 import anthropic
 import backoff
@@ -10,7 +11,10 @@ from llm import create_client, get_response_from_llm
 from prompts.tooluse_prompt import get_tooluse_prompt
 from tools import load_all_tools
 
-CLAUDE_MODEL = 'bedrock/us.anthropic.claude-3-5-sonnet-20241022-v2:0'
+CLAUDE_MODEL = os.environ.get(
+    'DGM_CLAUDE_MODEL',
+    'bedrock/us.anthropic.claude-3-5-sonnet-20241022-v2:0',
+)
 OPENAI_MODEL = 'o3-mini-2025-01-31'
 
 def process_tool_call(tools_dict, tool_name, tool_input):
@@ -366,6 +370,8 @@ def chat_with_agent_claude(
         tools = [convert_tool_info(tool['info'], model=client_model) for tool in all_tools]
 
         # Call API
+        separator = '=' * 10
+        logging(f"\n{separator} User Instruction {separator}\n{msg[:500]}{'... (truncated)' if len(msg) > 500 else ''}")
         response = get_response_withtools(
             client=client,
             model=client_model,
@@ -375,13 +381,20 @@ def chat_with_agent_claude(
             logging=logging,
         )
 
+        # Log assistant text blocks from response
+        for block in response.content:
+            if hasattr(block, "text") and block.text:
+                logging(f"\n{separator} Agent Response {separator}\n{block.text}")
+
         # Check for tool use
         tool_use = check_for_tool_use(response, model=client_model)
         while tool_use:
             # Process tool call
             tool_name = tool_use['tool_name']
             tool_input = tool_use['tool_input']
+            logging(f"\n{separator} Tool Call {separator}\nTool: {tool_name}\nInput: {tool_input}")
             tool_result = process_tool_call(tools_dict, tool_name, tool_input)
+            logging(f"\n{separator} Tool Result {separator}\n{str(tool_result)[:2000]}{'... (truncated)' if len(str(tool_result)) > 2000 else ''}")
 
             # Get tool response
             new_msg_history.append({"role": "assistant", "content": response.content})
@@ -404,6 +417,11 @@ def chat_with_agent_claude(
                 logging=logging,
             )
 
+            # Log assistant text blocks from response
+            for block in response.content:
+                if hasattr(block, "text") and block.text:
+                    logging(f"\n{separator} Agent Response {separator}\n{block.text}")
+
             # Check for next tool use
             tool_use = check_for_tool_use(response, model=client_model)
 
@@ -419,8 +437,9 @@ def chat_with_agent_claude(
             ],
         })
 
-    except Exception:
-        pass
+    except Exception as e:
+        logging(f"\n{separator} Exception {separator}\n{str(e)}")
+
 
     return new_msg_history
 
