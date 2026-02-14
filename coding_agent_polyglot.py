@@ -113,7 +113,7 @@ class AgenticSystem:
         self.language = language
 
         # Set the code model based on whether self-improvement is enabled
-        self.code_model = CLAUDE_MODEL if not self_improve else OPENAI_MODEL
+        self.code_model = CLAUDE_MODEL #if not self_improve else OPENAI_MODEL
 
         # Initialize logger and store it in thread-local storage
         self.logger = setup_logger(chat_history_file)
