@@ -118,6 +118,7 @@ def process_entry(entry, out_dname, model_name_or_path, model_patch_paths):
             "AWS_ACCESS_KEY_ID": os.getenv('AWS_ACCESS_KEY_ID'),
             "AWS_SECRET_ACCESS_KEY": os.getenv('AWS_SECRET_ACCESS_KEY'),
             "OPENAI_API_KEY": os.getenv('OPENAI_API_KEY'),
+            "DGM_CLAUDE_MODEL": os.getenv('DGM_CLAUDE_MODEL', ''),
         }
         safe_log("Running the agent")
         cmd = [
@@ -226,6 +227,7 @@ def harness(
     build_env_images(client, dataset=entries, force_rebuild=False, max_workers=max_workers)
     
     # Define a function to handle a single evaluation for all specified issues
+    ## NOTE: evaluation
     def process_evaluation(eval_idx):
         model_name_or_path_inst = f"{model_name_or_path}_{eval_idx}"
         out_dname = pred_dname / model_name_or_path_inst
