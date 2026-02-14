@@ -230,6 +230,24 @@ def main():
     )
     parser.add_argument("--continue_from", type=str, default=None, help="Directory to continue the run from.")
     parser.add_argument("--update_archive", type=str, default='keep_all', choices=['keep_better', 'keep_all'], help="Method to update the archive.")
+    parser.add_argument(
+        "--task_list_file",
+        type=str,
+        default=None,
+        help="Optional JSON file with task IDs for the primary (small) eval list.",
+    )
+    parser.add_argument(
+        "--task_list_more_file",
+        type=str,
+        default=None,
+        help="Optional JSON file with task IDs for the secondary (medium) eval list.",
+    )
+    parser.add_argument(
+        "--task_list_limit",
+        type=int,
+        default=None,
+        help="If set, keep only the first N tasks from --task_list_file/default subset.",
+    )
     # self-improve arguments
     parser.add_argument("--num_swe_evals", type=int, default=1, help="Number of repeated SWE evaluations to run for each self-improve attempt.")
     parser.add_argument('--post_improve_diagnose', default=False, action='store_true', help='Diagnose the self-improvement after evaluation')
@@ -253,13 +271,27 @@ def main():
     # Initialize
     archive, start_gen_num = initialize_run(output_dir, prevrun_dir=args.continue_from, polyglot=args.polyglot)
 
-    # SWE issues to consider
-    if not args.polyglot:
-        swe_issues_sm = load_json_file("./swe_bench/subsets/small.json")
-        swe_issues_med = load_json_file("./swe_bench/subsets/medium.json")
+    # Task lists to consider
+    if args.task_list_file:
+        swe_issues_sm = load_json_file(args.task_list_file)
     else:
-        swe_issues_sm = load_json_file("./polyglot/subsets/small.json")
-        swe_issues_med = load_json_file("./polyglot/subsets/medium.json")
+        if not args.polyglot:
+            swe_issues_sm = load_json_file("./swe_bench/subsets/small.json")
+        else:
+            swe_issues_sm = load_json_file("./polyglot/subsets/small.json")
+
+    if args.task_list_more_file:
+        swe_issues_med = load_json_file(args.task_list_more_file)
+    else:
+        if not args.polyglot:
+            swe_issues_med = load_json_file("./swe_bench/subsets/medium.json")
+        else:
+            swe_issues_med = load_json_file("./polyglot/subsets/medium.json")
+
+    if args.task_list_limit is not None:
+        swe_issues_sm = swe_issues_sm[:args.task_list_limit]
+        if swe_issues_med:
+            swe_issues_med = swe_issues_med[:args.task_list_limit]
 
     # Set up logger
     logger = setup_logger(os.path.join(output_dir, "dgm_outer.log"))
