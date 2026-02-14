@@ -66,6 +66,7 @@ class BashSession:
             )
         
         # Send command
+        # NOTE: Happend the thing that makes the issue.
         self._process.stdin.write(
             command.encode() + f"; echo '{self._sentinel}'\n".encode()
         )
