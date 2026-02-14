@@ -41,12 +41,14 @@ def process_entry(entry, out_dname, model_name_or_path, model_patch_paths):
     eval_file = out_dname / f"{instance_id}_eval.sh"
     eval_result_file = out_dname / f"{instance_id}_eval.md"
 
-    # Skip if output result already exists
+    # Reuse successful cached output; rerun failed/incomplete cached results.
     if out_fname.exists():
-        print(f"Skipping existing entry {instance_id}")
         with open(out_fname) as f:
-            result = json.loads(f.read())
-        return result
+            cached_result = json.loads(f.read())
+        if cached_result.get("success", False):
+            print(f"Skipping existing successful entry {instance_id}")
+            return cached_result
+        print(f"Re-running cached failed/incomplete entry {instance_id}")
 
     try:
         # Create and start the Docker container
@@ -106,11 +108,13 @@ def process_entry(entry, out_dname, model_name_or_path, model_patch_paths):
             "AWS_ACCESS_KEY_ID": os.getenv('AWS_ACCESS_KEY_ID'),
             "AWS_SECRET_ACCESS_KEY": os.getenv('AWS_SECRET_ACCESS_KEY'),
             "OPENAI_API_KEY": os.getenv('OPENAI_API_KEY'),
+            "DGM_CLAUDE_MODEL": os.getenv('DGM_CLAUDE_MODEL', ''),
         }
         safe_log("Running the agent")
+        agent_timeout = os.getenv('DGM_AGENT_TIMEOUT', '600')
         cmd = [
-            "timeout", "600",  # 10 min timeout
-            "python", "/dgm/coding_agent.py",
+            "timeout", agent_timeout,
+            "python", "-u", "/dgm/coding_agent.py",
             "--problem_statement", problem_statement,
             "--git_dir", "/testbed/",
             "--chat_history_file", chat_history_file_container,
@@ -120,11 +124,16 @@ def process_entry(entry, out_dname, model_name_or_path, model_patch_paths):
             "--language", entry['language'],
         ]
         exec_result = container.exec_run(cmd, environment=env_vars, workdir='/testbed/')
-        log_container_output(exec_result)
+        log_container_output(exec_result, raise_error=False)
+        if exec_result.exit_code and exec_result.exit_code != 0:
+            safe_log(f"Agent exited with code {exec_result.exit_code}")
 
-        # Copy output files back to host
+        # Copy output files back to host (always, even on agent failure)
         logger.info("Copying output files back to host")
-        copy_from_container(container, chat_history_file_container, chat_history_file)
+        try:
+            copy_from_container(container, chat_history_file_container, chat_history_file)
+        except Exception as copy_err:
+            safe_log(f"Could not copy chat history: {copy_err}")
         # Additional chat history files
         exec_result = container.exec_run(f"find /dgm/ -name '{instance_id}_*.md'", workdir='/')
         chat_history_files_container = exec_result.output.decode().split()
@@ -280,7 +289,9 @@ def harness(
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         model_name_or_path = f"{timestamp}--claude-3-5-sonnet-20241022"
     pred_dname = Path(pred_dname)
-    pred_dname.mkdir(exist_ok=True)
+    pred_dname.mkdir(parents=True, exist_ok=True)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     out_dnames = []
     
     # Prepare the dataset entries
@@ -314,7 +325,7 @@ def harness(
             # Process completed tasks as they finish
             for future in as_completed(future_to_entry):
                 result = future.result()
-                results.append(future.result())
+                results.append(result)
                 if result["success"]:
                     print(f"Successfully processed entry {result['instance_id']} for eval {eval_idx}")
                 else:
